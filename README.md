@@ -41,25 +41,23 @@ POST请求
 
 ```ObjC
 /**
- *  POST请求
- *
- *  @param url              请求路径
- *  @param cache            是否缓存
- *  @param refresh          解释同上
- *  @param params           拼接参数
- *  @param progressBlock    进度回调
- *  @param successBlock     成功回调
- *  @param failBlock        失败回调
- *
- *  @return 返回的对象中可取消请求
- */
-+ (ZBURLSessionTask *)postWithUrl:(NSString *)url
-                   refreshRequest:(BOOL)refresh
-                            cache:(BOOL)cache
-                           params:(NSDictionary *)params
-                    progressBlock:(ZBPostProgress)progressBlock
-                     successBlock:(ZBResponseSuccessBlock)successBlock
-                        failBlock:(ZBResponseFailBlock)failBlock;
+*  GET请求
+*
+*  @param url              请求路径
+*  @param cache            是否缓存
+*  @param params           拼接参数
+*  @param progressBlock    进度回调
+*  @param successBlock     成功回调
+*  @param failBlock        失败回调
+*
+*  @return 返回的对象中可取消请求
+*/
+- (ZBURLSessionTask *)getWithUrl:(NSString *)url
+                           cache:(BOOL)cache
+                          params:(NSDictionary *)params
+                   progressBlock:(ZBGetProgress)progressBlock
+                    successBlock:(ZBResponseSuccessBlock)successBlock
+                       failBlock:(ZBResponseFailBlock)failBlock;
 ```
 
 文件上传
@@ -79,7 +77,7 @@ POST请求
  *
  *  @return 返回的对象中可取消请求
  */
-+ (ZBURLSessionTask *)uploadFileWithUrl:(NSString *)url
+- (ZBURLSessionTask *)uploadFileWithUrl:(NSString *)url
                                 fileData:(NSData *)data
                                     type:(NSString *)type
                                     name:(NSString *)name
@@ -107,7 +105,7 @@ POST请求
  *
  *  @return 任务集合
  */
-+ (NSArray *)uploadMultFileWithUrl:(NSString *)url
+- (NSArray *)uploadMultFileWithUrl:(NSString *)url
                          fileDatas:(NSArray *)datas
                               type:(NSString *)type
                               name:(NSString *)name
@@ -129,10 +127,10 @@ POST请求
 *
 *  @return 返回的对象可取消请求
 */
-+ (ZBURLSessionTask *)downloadWithUrl:(NSString *)url
-progressBlock:(ZBDownloadProgress)progressBlock
-successBlock:(ZBDownloadSuccessBlock)successBlock
-failBlock:(ZBDownloadFailBlock)failBlock;
+- (ZBURLSessionTask *)downloadWithUrl:(NSString *)url
+                        progressBlock:(ZBDownloadProgress)progressBlock
+                         successBlock:(ZBDownloadSuccessBlock)successBlock
+                            failBlock:(ZBDownloadFailBlock)failBlock;
 ```
 
 获取当前正在运行的任务
@@ -143,19 +141,19 @@ failBlock:(ZBDownloadFailBlock)failBlock;
  *
  *  @return 
  */
-+ (NSArray *)currentRunningTasks;
+- (NSArray *)currentRunningTasks;
 ```
 
 取消所有网络请求
 
 ```OjbC
-+ (void)cancleAllRequest;
+- (void)cancleAllRequest;
 
 ```
 取消下载请求
 
 ```ObjC
-+ (void)cancelRequestWithURL:(NSString *)url;
+- (void)cancelRequestWithURL:(NSString *)url;
 ```
 
 获取缓存大小
@@ -166,7 +164,7 @@ failBlock:(ZBDownloadFailBlock)failBlock;
  *
  *  @return 缓存大小
  */
-+ (NSUInteger)totalCacheSize;
+- (NSUInteger)totalCacheSize;
 ```
 
 清理缓存
@@ -175,7 +173,7 @@ failBlock:(ZBDownloadFailBlock)failBlock;
 /**
  *  清除所有缓存
  */
-+ (void)clearTotalCache;
+- (void)clearTotalCache;
 ```
 
 
@@ -197,4 +195,5 @@ failBlock:(ZBDownloadFailBlock)failBlock;
 
 # SourceCode Analysis
 <http://www.jianshu.com/p/61a2c4048daf>
+
 <http://blog.csdn.net/biyuhuaping/article/details/78721571>
