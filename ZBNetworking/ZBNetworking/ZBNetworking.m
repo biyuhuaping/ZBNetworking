@@ -37,7 +37,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 
 
 @interface ZBNetworking()
-@property (strong, nonatomic) AFHTTPSessionManager *manager;
+@property (assign, nonatomic) AFHTTPSessionManager *manager;
 @end
 
 @implementation ZBNetworking
@@ -67,15 +67,16 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 - (AFHTTPSessionManager *)manager {
     [AFNetworkActivityIndicatorManager sharedManager].enabled = YES;
     if (!_manager) {
-        _manager = [AFHTTPSessionManager manager];
+        AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
         //默认解析模式
-        _manager.requestSerializer = [AFHTTPRequestSerializer serializer];
-        _manager.responseSerializer = [AFJSONResponseSerializer serializer];
-        _manager.requestSerializer.stringEncoding = NSUTF8StringEncoding;
-        _manager.requestSerializer.timeoutInterval = TIMEOUT;
+        manager.requestSerializer = [AFHTTPRequestSerializer serializer];
+        manager.responseSerializer = [AFJSONResponseSerializer serializer];
+        manager.requestSerializer.stringEncoding = NSUTF8StringEncoding;
+        manager.requestSerializer.timeoutInterval = TIMEOUT;
         
         //配置响应序列化
-        _manager.responseSerializer.acceptableContentTypes = [NSSet setWithArray:@[@"application/json", @"text/html", @"text/json", @"text/plain", @"text/javascript", @"text/xml", @"image/*", @"application/octet-stream", @"application/zip"]];
+        manager.responseSerializer.acceptableContentTypes = [NSSet setWithArray:@[@"application/json", @"text/html", @"text/json", @"text/plain", @"text/javascript", @"text/xml", @"image/*", @"application/octet-stream", @"application/zip"]];
+        _manager = manager;
     }
     for (NSString *key in headers.allKeys) {
         if (headers[key] != nil) {
@@ -91,7 +92,8 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 - (ZBURLSessionTask *)getWithUrl:(NSString *)url cache:(BOOL)cache params:(NSDictionary *)params progressBlock:(ZBGetProgress)progressBlock successBlock:(ZBResponseSuccessBlock)successBlock failBlock:(ZBResponseFailBlock)failBlock {
     //将session拷贝到堆中，block内部才可以获取得到session
     __block ZBURLSessionTask *session = nil;
-    
+    AFHTTPSessionManager *manager = [self manager];
+
     //网络验证
     if (networkReachabilityStatus == AFNetworkReachabilityStatusNotReachable) {
         if (failBlock) {
@@ -106,12 +108,12 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
             successBlock(responseObj);
         }
     }
-    session = [self.manager GET:url parameters:params progress:^(NSProgress * _Nonnull downloadProgress) {
+    session = [manager GET:url parameters:params progress:^(NSProgress * _Nonnull downloadProgress) {
         if (progressBlock) {
             progressBlock(downloadProgress.completedUnitCount, downloadProgress.totalUnitCount);
         }
     } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-        BOOL isValid = [self networkResponseData:responseObject];
+        BOOL isValid = [self networkResponseManage:responseObject];
         if (successBlock && isValid) {
             successBlock(responseObject);
         }
@@ -139,7 +141,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 }
 
 #pragma mark post
-- (ZBURLSessionTask *)postWithUrl:(NSString *)url refreshRequest:(BOOL)refresh cache:(BOOL)cache params:(NSDictionary *)params progressBlock:(ZBPostProgress)progressBlock successBlock:(ZBResponseSuccessBlock)successBlock failBlock:(ZBResponseFailBlock)failBlock {
+- (ZBURLSessionTask *)postWithUrl:(NSString *)url cache:(BOOL)cache params:(NSDictionary *)params progressBlock:(ZBPostProgress)progressBlock successBlock:(ZBResponseSuccessBlock)successBlock failBlock:(ZBResponseFailBlock)failBlock {
     __block ZBURLSessionTask *session = nil;
     AFHTTPSessionManager *manager = [self manager];
     if (networkReachabilityStatus == AFNetworkReachabilityStatusNotReachable) {
@@ -155,7 +157,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
     session = [manager POST:url parameters:params progress:^(NSProgress * _Nonnull uploadProgress) {
         if (progressBlock) progressBlock(uploadProgress.completedUnitCount, uploadProgress.totalUnitCount);
     } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-        BOOL isValid = [self networkResponseData:responseObject];
+        BOOL isValid = [self networkResponseManage:responseObject];
         if (successBlock && isValid) successBlock(responseObject);
         if (cache) [[ZBCacheManager shareManager] cacheResponseObject:responseObject requestUrl:url params:params];
         if ([requestTasksPool containsObject:session]) {
@@ -180,31 +182,15 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 }
 
 #pragma mark 文件上传
-- (ZBURLSessionTask *)uploadFileWithUrl:(NSString *)url
-                               fileData:(NSData *)data
-                                   type:(NSString *)type
-                                   name:(NSString *)name
-                               mimeType:(NSString *)mimeType
-                          progressBlock:(ZBUploadProgressBlock)progressBlock
-                           successBlock:(ZBResponseSuccessBlock)successBlock
-                              failBlock:(ZBResponseFailBlock)failBlock {
+- (ZBURLSessionTask *)uploadFileWithUrl:(NSString *)url fileData:(NSData *)data name:(NSString *)name fileName:(NSString *)fileName mimeType:(NSString *)mimeType progressBlock:(ZBUploadProgressBlock)progressBlock successBlock:(ZBResponseSuccessBlock)successBlock failBlock:(ZBResponseFailBlock)failBlock {
     __block ZBURLSessionTask *session = nil;
-    
     AFHTTPSessionManager *manager = [self manager];
-    
     if (networkReachabilityStatus == AFNetworkReachabilityStatusNotReachable) {
         if (failBlock) failBlock(ZB_ERROR);
         return session;
     }
     
     session = [manager POST:url parameters:nil constructingBodyWithBlock:^(id<AFMultipartFormData>  _Nonnull formData) {
-        NSString *fileName = nil;
-        
-        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-        formatter.dateFormat = @"yyyyMMddHHmmss";
-        
-        NSString *day = [formatter stringFromDate:[NSDate date]];
-        fileName = [NSString stringWithFormat:@"%@.%@",day,type];
         [formData appendPartWithFileData:data name:name fileName:fileName mimeType:mimeType];
     } progress:^(NSProgress * _Nonnull uploadProgress) {
         if (progressBlock) progressBlock (uploadProgress.completedUnitCount,uploadProgress.totalUnitCount);
@@ -223,14 +209,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 }
 
 #pragma mark 多文件上传
-- (NSArray *)uploadMultFileWithUrl:(NSString *)url
-                         fileDatas:(NSArray *)datas
-                              type:(NSString *)type
-                              name:(NSString *)name
-                          mimeType:(NSString *)mimeTypes
-                     progressBlock:(ZBUploadProgressBlock)progressBlock
-                      successBlock:(ZBMultUploadSuccessBlock)successBlock
-                         failBlock:(ZBMultUploadFailBlock)failBlock {
+- (NSArray *)uploadMultFileWithUrl:(NSString *)url fileDatas:(NSArray *)datas name:(NSString *)name fileName:(NSString *)fileName mimeType:(NSString *)mimeTypes progressBlock:(ZBUploadProgressBlock)progressBlock successBlock:(ZBMultUploadSuccessBlock)successBlock failBlock:(ZBMultUploadFailBlock)failBlock {
     
     if (networkReachabilityStatus == AFNetworkReachabilityStatusNotReachable) {
         if (failBlock) failBlock(@[ZB_ERROR]);
@@ -247,7 +226,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
     for (int i = 0; i < count; i++) {
         __block ZBURLSessionTask *session = nil;
         dispatch_group_enter(uploadGroup);
-        session = [self uploadFileWithUrl:url fileData:datas[i] type:type name:name mimeType:mimeTypes progressBlock:^(int64_t bytesWritten, int64_t totalBytes) {
+        session = [self uploadFileWithUrl:url fileData:datas[i] name:name fileName:fileName mimeType:mimeTypes progressBlock:^(int64_t bytesWritten, int64_t totalBytes) {
             if (progressBlock) progressBlock(bytesWritten, totalBytes);
         } successBlock:^(id response) {
             [responses addObject:response];
@@ -290,8 +269,8 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 
 #pragma mark 下载
 - (ZBURLSessionTask *)downloadWithUrl:(NSString *)url progressBlock:(ZBDownloadProgress)progressBlock successBlock:(ZBDownloadSuccessBlock)successBlock failBlock:(ZBDownloadFailBlock)failBlock {
-    NSString *type = nil;
-    NSArray *subStringArr = nil;
+//    NSString *type = nil;
+//    NSArray *subStringArr = nil;
     __block ZBURLSessionTask *session = nil;
     
     NSURL *fileUrl = [[ZBCacheManager shareManager] getDownloadDataFromCacheWithRequestUrl:url];
@@ -300,12 +279,12 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
         return nil;
     }
     
-    if (url) {
-        subStringArr = [url componentsSeparatedByString:@"."];
-        if (subStringArr.count > 0) {
-            type = subStringArr[subStringArr.count - 1];
-        }
-    }
+//    if (url) {
+//        subStringArr = [url componentsSeparatedByString:@"."];
+//        if (subStringArr.count > 0) {
+//            type = subStringArr[subStringArr.count - 1];
+//        }
+//    }
     
     AFHTTPSessionManager *manager = [self manager];
     //响应内容序列化为二进制
@@ -373,7 +352,6 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 }
 
 #pragma mark - other method
-
 - (void)cancleAllRequest {
     @synchronized (self) {
         [requestTasksPool enumerateObjectsUsingBlock:^(ZBURLSessionTask  *_Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
@@ -409,7 +387,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
 
 #pragma mark - 网络回调统一处理
 //网络回调统一处理
-- (BOOL)networkResponseData:(id)responseObject{
+- (BOOL)networkResponseManage:(id)responseObject{
     NSData *data = nil;
     NSError *error = nil;
     if ([responseObject isKindOfClass:[NSData class]]) {
@@ -417,7 +395,7 @@ static AFNetworkReachabilityStatus networkReachabilityStatus;
     }else if ([responseObject isKindOfClass:[NSDictionary class]]){
         data = [NSJSONSerialization dataWithJSONObject:responseObject options:NSJSONWritingPrettyPrinted error:&error];
     }
-    id json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:&error];
+//    id json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:&error];
 //    NSLog(@"%@",json);
     
     //统一判断所有请求返回状态，例如：强制更新为6，若为6就返回YES，
